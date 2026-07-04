@@ -1,5 +1,5 @@
 const { query } = require('../config/db');
-const { sendQuoteAck, sendContactAck } = require('../config/email');
+const { sendQuoteAck, sendContactAck, sendContactNotification } = require('../config/email');
 
 // ═══════════════════════ QUOTE REQUESTS ═══════════════════════
 
@@ -94,6 +94,7 @@ exports.createContact = async (req, res) => {
       [name, email, phone, message]
     );
     sendContactAck({ to: email, name }).catch(console.error);
+    sendContactNotification({ name, email, phone, message }).catch(console.error);
     res.status(201).json({ success: true, message: 'Message sent! We\'ll respond shortly.' });
   } catch (err) {
     console.error('createContact:', err);

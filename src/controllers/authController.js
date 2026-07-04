@@ -1,8 +1,11 @@
 const bcrypt    = require('bcryptjs');
 const jwt       = require('jsonwebtoken');
 const crypto    = require('crypto');
+const { OAuth2Client } = require('google-auth-library');
 const { query } = require('../config/db');
 const email     = require('../config/email');
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const signToken = (id) =>
   jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -52,7 +55,10 @@ exports.login = async (req, res) => {
     );
     const user = rows[0];
 
-    if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+    if (!user || !user.password_hash) {
+      return res.status(401).json({ success: false, message: 'Invalid email or password.' });
+    }
+    if (!(await bcrypt.compare(password, user.password_hash))) {
       return res.status(401).json({ success: false, message: 'Invalid email or password.' });
     }
 
@@ -70,7 +76,61 @@ exports.login = async (req, res) => {
   }
 };
 
-// ── GET /api/auth/verify-email?token=xxx ────────────────────
+// ── POST /api/auth/google ────────────────────────────────────
+// Body: { credential }  — the ID token returned by Google Identity Services
+exports.googleLogin = async (req, res) => {
+  try {
+    const { credential } = req.body;
+    if (!credential) {
+      return res.status(400).json({ success: false, message: 'Missing Google credential.' });
+    }
+    if (!process.env.GOOGLE_CLIENT_ID) {
+      return res.status(500).json({ success: false, message: 'Google login is not configured on the server.' });
+    }
+
+    // Verifies the token's signature, audience, issuer and expiry against Google.
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    const { sub: googleId, email: userEmail, name, email_verified } = payload;
+
+    if (!email_verified) {
+      return res.status(401).json({ success: false, message: 'Your Google email is not verified.' });
+    }
+
+    const { rows } = await query('SELECT * FROM users WHERE email=$1 OR google_id=$2', [userEmail, googleId]);
+    let user = rows[0];
+
+    if (!user) {
+      // Brand new account, created via Google — no password set.
+      const inserted = await query(
+        `INSERT INTO users (name,email,password_hash,google_id,role,is_verified)
+         VALUES ($1,$2,NULL,$3,'buyer',TRUE) RETURNING *`,
+        [name || userEmail.split('@')[0], userEmail, googleId]
+      );
+      user = inserted.rows[0];
+    } else if (!user.google_id) {
+      // Existing email/password account — link the Google identity to it.
+      const updated = await query(
+        `UPDATE users SET google_id=$1, is_verified=TRUE WHERE id=$2 RETURNING *`,
+        [googleId, user.id]
+      );
+      user = updated.rows[0];
+    }
+
+    const token = signToken(user.id);
+    const { password_hash, verify_token, reset_token, reset_token_expires, google_id, ...safe } = user;
+
+    return res.json({ success: true, token, user: safe });
+  } catch (err) {
+    console.error('googleLogin:', err);
+    return res.status(401).json({ success: false, message: 'Google authentication failed. Please try again.' });
+  }
+};
+
+
 exports.verifyEmail = async (req, res) => {
   try {
     const { token } = req.query;

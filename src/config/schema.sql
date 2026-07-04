@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS users (
   id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name          VARCHAR(150) NOT NULL,
   email         VARCHAR(200) UNIQUE NOT NULL,
-  password_hash VARCHAR(255) NOT NULL,
+  password_hash VARCHAR(255),                            -- NULL allowed for Google-only accounts
+  google_id     VARCHAR(255) UNIQUE,                      -- Google "sub" claim, set for Google sign-ins
   role          VARCHAR(20)  NOT NULL DEFAULT 'buyer'   -- 'buyer' | 'admin'
                   CHECK (role IN ('buyer','admin')),
   company       VARCHAR(200),

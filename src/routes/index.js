@@ -55,6 +55,12 @@ router.post('/auth/login',
 
 router.get('/auth/verify-email',  authCtrl.verifyEmail);
 
+router.post('/auth/google',
+  [body('credential').notEmpty().withMessage('Missing Google credential.')],
+  validate,
+  authCtrl.googleLogin
+);
+
 router.post('/auth/forgot-password',
   [body('email').isEmail()],
   validate,

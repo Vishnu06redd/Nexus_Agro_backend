@@ -45,6 +45,27 @@ const sendContactAck = async ({ to, name }) => {
   });
 };
 
+const sendContactNotification = async ({ name, email, phone, message }) => {
+  const adminEmail = process.env.ADMIN_EMAIL || process.env.SMTP_USER;
+  await transporter.sendMail({
+    from: FROM,
+    to: adminEmail,
+    replyTo: email,
+    subject: `New Contact Message — ${name}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:560px;margin:auto;">
+        <h2 style="color:#C89B3C;">New Contact Form Submission</h2>
+        <p><strong>Name:</strong> ${name}</p>
+        <p><strong>Email:</strong> ${email}</p>
+        ${phone ? `<p><strong>Phone:</strong> ${phone}</p>` : ''}
+        <p><strong>Message:</strong></p>
+        <p style="white-space:pre-wrap;background:#f8f8f8;padding:12px;border-radius:6px;">${message}</p>
+        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
+        <p style="color:#888;font-size:12px;">Reply directly to this email to respond to ${name}, or check the admin dashboard.</p>
+      </div>`,
+  });
+};
+
 const sendVerificationEmail = async ({ to, name, token }) => {
   const link = `${process.env.CLIENT_URL}/verify-email?token=${token}`;
   await transporter.sendMail({
@@ -95,6 +116,7 @@ const sendNewsletterWelcome = async ({ to }) => {
 module.exports = {
   sendQuoteAck,
   sendContactAck,
+  sendContactNotification,
   sendVerificationEmail,
   sendPasswordReset,
   sendNewsletterWelcome,
